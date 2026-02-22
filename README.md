@@ -23,11 +23,6 @@
 
 ## 文件结构
 
-```
-index.html    ← 所有代码在这一个文件里，无需其他依赖
-README.md     ← 本说明
-```
-
 所有依赖均通过 CDN 加载：
 - React 18 (cdnjs)
 - Babel Standalone (cdnjs)
