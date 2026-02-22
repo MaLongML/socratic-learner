@@ -290,15 +290,28 @@ function fileIcon(name) {
 }
 
 function detectTransitions(text, { learningMode, newPhase, setNewPhase, bloomLevel, setBloomLevel, setBloomHistory, deepenLevel, setDeepenLevel }) {
+  // Strip markdown so **应用层** or --- dont break string matching
+  const clean = text.replace(/\*+/g, "").replace(/_{2,}/g, "").replace(/-{3,}/g, "").replace(/\s+/g, " ");
+
   if (learningMode === "new") {
-    if ((text.includes("开始进入内容") || text.includes("我们开始进入")) && newPhase === "activate") setNewPhase("read");
-    if ((text.includes("走完了全部内容") || text.includes("深化一下")) && newPhase === "read") setNewPhase("deepen");
+    if (clean.includes("开始进入内容") || clean.includes("我们开始进入") || clean.includes("进入内容")) {
+      if (newPhase === "activate") setNewPhase("read");
+    }
+    if (clean.includes("走完了全部") || clean.includes("深化一下") || clean.includes("全部内容")) {
+      if (newPhase === "read" || newPhase === "activate") setNewPhase("deepen");
+    }
   }
+
   const bloomMap = { 记忆:1, 理解:2, 应用:3, 分析:4, 评估:5, 创造:6 };
   for (const [k, v] of Object.entries(bloomMap)) {
-    if (text.includes(`进入了${k}`) || (text.includes(`${k}层`) && text.includes("进入"))) {
+    const triggered =
+      clean.includes(`进入了${k}`) ||
+      clean.includes(`进入${k}层`) ||
+      (clean.includes(`${k}层`) && clean.includes("进入")) ||
+      new RegExp(`进入.{0,6}${k}.{0,3}层`).test(clean);
+    if (triggered) {
       if (learningMode === "review") { setBloomLevel(v); setBloomHistory(p => [...new Set([...p, v])]); }
-      else setDeepenLevel(v);
+      else { setDeepenLevel(v); setNewPhase("deepen"); }
       break;
     }
   }
