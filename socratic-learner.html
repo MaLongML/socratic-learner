@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>苏格拉底导师</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;700&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root { height: 100%; }
+  body { background: #13110e; font-family: 'Noto Serif SC', serif; color: #e8e0d0; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: #3a3428; border-radius: 2px; }
+  @keyframes pulse { 0%,80%,100%{transform:scale(0.6);opacity:0.3} 40%{transform:scale(1);opacity:1} }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+  textarea:focus, input:focus, select:focus { outline: none; }
+  button { font-family: 'Noto Serif SC', serif; }
+  button:hover { filter: brightness(1.12); }
+  .msg-enter { animation: fadeIn 0.25s ease; }
+  .content-block {
+    margin: 8px 0;
+    padding: 12px 16px;
+    background: #1a2820;
+    border-left: 3px solid #8FA8C8;
+    border-radius: 0 8px 8px 0;
+    color: #c8d8e8;
+    font-size: 13px;
+    line-height: 1.85;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback } = React;
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const BLOOM = [
+  { id:1, name:"记忆", color:"#7B9E87", bg:"#7B9E8715", icon:"◈", desc:"复述与识别" },
+  { id:2, name:"理解", color:"#8FA8C8", bg:"#8FA8C815", icon:"◉", desc:"解释与归纳" },
+  { id:3, name:"应用", color:"#C8A87B", bg:"#C8A87B15", icon:"◎", desc:"执行与实践" },
+  { id:4, name:"分析", color:"#B8A0D0", bg:"#B8A0D015", icon:"◇", desc:"拆解与比较" },
+  { id:5, name:"评估", color:"#D08080", bg:"#D0808015", icon:"◆", desc:"批判与判断" },
+  { id:6, name:"创造", color:"#D4B86A", bg:"#D4B86A15", icon:"✦", desc:"设计与生成" },
+];
+
+const NEW_PHASES = [
+  { id:"activate", name:"激活先验", icon:"◌", color:"#9EBA8A", bg:"#9EBA8A15", desc:"连接已有认知" },
+  { id:"read",     name:"分块阅读", icon:"◎", color:"#8FA8C8", bg:"#8FA8C815", desc:"逐段接触新知" },
+  { id:"deepen",   name:"高阶深化", icon:"✦", color:"#D4B86A", bg:"#D4B86A15", desc:"应用·分析·评估·创造" },
+];
+
+const PROVIDERS = {
+  anthropic: {
+    name: "Anthropic",
+    icon: "◈",
+    color: "#C8A87B",
+    models: [
+      { id: "claude-opus-4-5-20251101",   label: "Claude Opus 4.5" },
+      { id: "claude-sonnet-4-5-20251022", label: "Claude Sonnet 4.5" },
+      { id: "claude-sonnet-4-20250514",   label: "Claude Sonnet 4" },
+      { id: "claude-haiku-4-5-20251001",  label: "Claude Haiku 4.5" },
+    ],
+    placeholder: "sk-ant-...",
+    docs: "https://console.anthropic.com/keys",
+  },
+  openai: {
+    name: "OpenAI",
+    icon: "◉",
+    color: "#7B9E87",
+    models: [
+      { id: "gpt-4o",       label: "GPT-4o" },
+      { id: "gpt-4o-mini",  label: "GPT-4o Mini" },
+      { id: "gpt-4-turbo",  label: "GPT-4 Turbo" },
+      { id: "o1-preview",   label: "o1 Preview" },
+    ],
+    placeholder: "sk-...",
+    docs: "https://platform.openai.com/api-keys",
+  },
+  gemini: {
+    name: "Google Gemini",
+    icon: "◇",
+    color: "#8FA8C8",
+    models: [
+      { id: "gemini-2.0-flash",      label: "Gemini 2.0 Flash" },
+      { id: "gemini-1.5-pro",        label: "Gemini 1.5 Pro" },
+      { id: "gemini-1.5-flash",      label: "Gemini 1.5 Flash" },
+    ],
+    placeholder: "AIza...",
+    docs: "https://aistudio.google.com/app/apikey",
+  },
+  deepseek: {
+    name: "DeepSeek",
+    icon: "◆",
+    color: "#B8A0D0",
+    models: [
+      { id: "deepseek-chat",     label: "DeepSeek Chat (V3)" },
+      { id: "deepseek-reasoner", label: "DeepSeek Reasoner (R1)" },
+    ],
+    placeholder: "sk-...",
+    docs: "https://platform.deepseek.com/api_keys",
+  },
+};
+
+// ─── Prompts ──────────────────────────────────────────────────────────────────
+const NEW_PROMPT = (content) => `你是一位苏格拉底式引导导师，专门帮助学生第一次接触新知识。
+
+【学习材料（仅你可见，学生尚未阅读）】
+${content}
+
+【核心教学原则】
+这位学生是第一次接触这个内容，不能用"记忆层"提问——他们什么都还不知道。
+正确方式：你主动引导他们一步步发现知识，而不是考察他们已知的内容。
+
+【三阶段流程，严格按顺序执行】
+
+▌第一阶段：激活先验（1-2轮）
+- 激活学生已有的相关认知，建立"锚点"
+- 提问风格："在接触这个内容之前，你对[主题]有什么印象或联想？"
+- 不评判对错，完成后说"好，我们开始进入内容。"
+
+▌第二阶段：分块阅读 + 苏格拉底消化（核心阶段）
+- 将学习材料拆成3-5个逻辑块
+- 每次只呈现一块，用「」括起内容，与你的话区分
+- 呈现后立即提问帮助消化：
+  * "这段话的核心意思是什么？用你自己的话说说。"
+  * "如果要给朋友解释，你会怎么说？"
+  * "这里有没有让你感到意外的地方？"
+- 根据回答追问，理解扎实后再展示下一块
+- 全部块读完后说"我们已经走完了全部内容，现在来深化一下。"
+
+▌第三阶段：高阶深化（Bloom应用层以上）
+- 理解和记忆已在阅读中建立，跳过这两层
+- 按顺序：应用→分析→评估→创造
+- 升层时明确说"我们进入了[层次名]层"
+
+【通用规则】
+- 每次只问一个问题，等待回答
+- 绝不直接给答案，用追问、类比、反例引导
+- 语气温暖、好奇、有耐心
+
+现在开始。执行第一阶段：激活先验。`;
+
+const REVIEW_PROMPT = (content) => `你是一位苏格拉底式AI导师。学生已学过以下内容，通过提问帮他深化理解。
+
+【学习材料】
+${content}
+
+【核心原则】
+1. 每次只问一个问题，等待回答后再继续
+2. 严格遵循Bloom认知层次递进：记忆→理解→应用→分析→评估→创造
+3. 绝不直接给答案。回答错误或浅显时，用反问或类比引导
+4. 回答正确深刻时，简短肯定后升一层
+5. 每升一层明确说"我们进入了[层次名]层"
+6. 语气温和、好奇、鼓励
+
+现在开始。从记忆层出发，问第一个问题。`;
+
+// ─── API call router ──────────────────────────────────────────────────────────
+async function callAI(provider, apiKey, model, systemPrompt, messages) {
+  if (provider === "anthropic") {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1200,
+        system: systemPrompt,
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+      }),
+    });
+    const d = await res.json();
+    if (d.error) throw new Error(d.error.message);
+    return d.content?.[0]?.text || "";
+  }
+
+  if (provider === "openai") {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1200,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messages.map(m => ({ role: m.role, content: m.content })),
+        ],
+      }),
+    });
+    const d = await res.json();
+    if (d.error) throw new Error(d.error.message);
+    return d.choices?.[0]?.message?.content || "";
+  }
+
+  if (provider === "gemini") {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: messages.map(m => ({
+          role: m.role === "assistant" ? "model" : "user",
+          parts: [{ text: m.content }],
+        })),
+        generationConfig: { maxOutputTokens: 1200 },
+      }),
+    });
+    const d = await res.json();
+    if (d.error) throw new Error(d.error.message);
+    return d.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  }
+
+  if (provider === "deepseek") {
+    const res = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1200,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messages.map(m => ({ role: m.role, content: m.content })),
+        ],
+      }),
+    });
+    const d = await res.json();
+    if (d.error) throw new Error(d.error.message);
+    return d.choices?.[0]?.message?.content || "";
+  }
+
+  throw new Error("Unknown provider: " + provider);
+}
+
+// ─── File parsers ─────────────────────────────────────────────────────────────
+async function loadPdfJs() {
+  if (window.pdfjsLib) return window.pdfjsLib;
+  return new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      res(window.pdfjsLib);
+    };
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+async function parsePdf(file) {
+  const lib = await loadPdfJs();
+  const pdf = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+  let t = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const pg = await pdf.getPage(i);
+    const c = await pg.getTextContent();
+    t += c.items.map(x => x.str).join(" ") + "\n";
+  }
+  return t.trim();
+}
+async function parseDocx(file) {
+  const r = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+  return r.value.trim();
+}
+async function parseTxt(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = rej;
+    r.readAsText(file, "UTF-8");
+  });
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fileIcon(name) {
+  const ext = name.split(".").pop().toLowerCase();
+  return { pdf:"📄", docx:"📝", doc:"📝", txt:"📃", md:"📋" }[ext] || "📁";
+}
+
+function detectTransitions(text, { learningMode, newPhase, setNewPhase, bloomLevel, setBloomLevel, setBloomHistory, deepenLevel, setDeepenLevel }) {
+  if (learningMode === "new") {
+    if ((text.includes("开始进入内容") || text.includes("我们开始进入")) && newPhase === "activate") setNewPhase("read");
+    if ((text.includes("走完了全部内容") || text.includes("深化一下")) && newPhase === "read") setNewPhase("deepen");
+  }
+  const bloomMap = { 记忆:1, 理解:2, 应用:3, 分析:4, 评估:5, 创造:6 };
+  for (const [k, v] of Object.entries(bloomMap)) {
+    if (text.includes(`进入了${k}`) || (text.includes(`${k}层`) && text.includes("进入"))) {
+      if (learningMode === "review") { setBloomLevel(v); setBloomHistory(p => [...new Set([...p, v])]); }
+      else setDeepenLevel(v);
+      break;
+    }
+  }
+}
+
+function FormattedMsg({ text }) {
+  const parts = text.split(/(「[^」]*」)/g);
+  return React.createElement("div", null,
+    parts.map((p, i) =>
+      p.startsWith("「") && p.endsWith("」")
+        ? React.createElement("div", { key:i, className:"content-block" }, p.slice(1,-1))
+        : React.createElement("span", { key:i, style:{ whiteSpace:"pre-wrap" } }, p)
+    )
+  );
+}
+
+// ─── Settings Panel ───────────────────────────────────────────────────────────
+function SettingsPanel({ config, setConfig, onClose }) {
+  const [local, setLocal] = useState(config);
+  const prov = PROVIDERS[local.provider];
+
+  const save = () => {
+    localStorage.setItem("socratic_config", JSON.stringify(local));
+    setConfig(local);
+    onClose();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#00000088", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ background:"#1c1a16", border:"1px solid #3e3828", borderRadius:16, padding:32, width:480, maxWidth:"95vw", maxHeight:"90vh", overflowY:"auto" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
+          <h2 style={{ fontSize:18, fontWeight:700, color:"#f0e8d8", fontFamily:"'Crimson Pro', serif" }}>模型设置</h2>
+          <button onClick={onClose} style={{ background:"none", border:"none", color:"#5a5248", fontSize:20, cursor:"pointer" }}>×</button>
+        </div>
+
+        {/* Provider */}
+        <div style={f.field}>
+          <label style={f.label}>AI 提供商</label>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            {Object.entries(PROVIDERS).map(([id, p]) => (
+              <button key={id} onClick={() => setLocal(l => ({ ...l, provider:id, model:p.models[0].id }))}
+                style={{ padding:"10px 14px", borderRadius:10, border:`1.5px solid ${local.provider===id ? p.color+"66" : "#2e2a22"}`, background: local.provider===id ? p.color+"12" : "#13110e", color: local.provider===id ? p.color : "#5a5248", fontSize:13, cursor:"pointer", textAlign:"left", display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:16 }}>{p.icon}</span>
+                <div>
+                  <div style={{ fontWeight:600, fontSize:12 }}>{p.name}</div>
+                  <div style={{ fontSize:10, opacity:0.7, marginTop:1 }}>{p.models.length} 个模型</div>
+                </div>
+                {local.provider===id && <span style={{ marginLeft:"auto", fontSize:10, color:p.color }}>●</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Model */}
+        <div style={f.field}>
+          <label style={f.label}>模型</label>
+          <select value={local.model} onChange={e => setLocal(l => ({ ...l, model:e.target.value }))}
+            style={{ width:"100%", background:"#13110e", border:"1px solid #2e2a22", borderRadius:8, padding:"10px 14px", color:"#e8e0d0", fontSize:13, fontFamily:"'Noto Serif SC', serif", cursor:"pointer" }}>
+            {prov.models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </select>
+        </div>
+
+        {/* API Key */}
+        <div style={f.field}>
+          <label style={{ ...f.label, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <span>API Key</span>
+            <a href={prov.docs} target="_blank" rel="noopener" style={{ fontSize:11, color:"#6a8a7a", textDecoration:"none" }}>获取 Key →</a>
+          </label>
+          <input
+            type="password"
+            value={local.keys?.[local.provider] || ""}
+            onChange={e => setLocal(l => ({ ...l, keys:{ ...(l.keys||{}), [l.provider]:e.target.value } }))}
+            placeholder={prov.placeholder}
+            style={{ width:"100%", background:"#13110e", border:"1px solid #2e2a22", borderRadius:8, padding:"10px 14px", color:"#e8e0d0", fontSize:13, fontFamily:"monospace" }}
+          />
+          <div style={{ fontSize:11, color:"#4a4438", marginTop:6 }}>API Key 仅存储在本地浏览器，不会上传到任何服务器</div>
+        </div>
+
+        {/* Already have keys for other providers */}
+        {Object.entries(local.keys || {}).filter(([k,v]) => k !== local.provider && v).length > 0 && (
+          <div style={{ background:"#13110e", border:"1px solid #2e2a22", borderRadius:8, padding:"10px 14px", marginBottom:20 }}>
+            <div style={{ fontSize:11, color:"#5a5248", marginBottom:6 }}>已保存的其他 Key</div>
+            {Object.entries(local.keys || {}).filter(([k,v]) => k !== local.provider && v).map(([k]) => (
+              <div key={k} style={{ fontSize:12, color:"#7a7060", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span>{PROVIDERS[k]?.name}</span>
+                <button onClick={() => setLocal(l => { const keys={...l.keys}; delete keys[k]; return {...l,keys}; })}
+                  style={{ background:"none", border:"none", color:"#5a3a3a", cursor:"pointer", fontSize:12 }}>删除</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={onClose} style={{ flex:1, padding:"11px", background:"transparent", border:"1px solid #2e2a22", borderRadius:10, color:"#5a5248", fontSize:14, cursor:"pointer" }}>取消</button>
+          <button onClick={save} style={{ flex:2, padding:"11px", background:"#D4B86A", border:"none", borderRadius:10, color:"#13110e", fontSize:14, fontWeight:700, cursor:"pointer" }}>保存设置</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+function App() {
+  const defaultConfig = { provider:"anthropic", model:"claude-sonnet-4-20250514", keys:{} };
+  const [config, setConfig] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("socratic_config")) || defaultConfig; }
+    catch { return defaultConfig; }
+  });
+  const [showSettings, setShowSettings] = useState(false);
+
+  const [phase, setPhase]               = useState("input");
+  const [inputTab, setInputTab]         = useState("text");
+  const [textContent, setTextContent]   = useState("");
+  const [urlInput, setUrlInput]         = useState("");
+  const [subject, setSubject]           = useState("");
+  const [learningMode, setLearningMode] = useState("new");
+  const [finalContent, setFinalContent] = useState("");
+  const [messages, setMessages]         = useState([]);
+  const [userInput, setUserInput]       = useState("");
+  const [loading, setLoading]           = useState(false);
+  const [preparing, setPreparing]       = useState(false);
+  const [prepareStatus, setPrepareStatus] = useState("");
+  const [bloomLevel, setBloomLevel]     = useState(1);
+  const [bloomHistory, setBloomHistory] = useState([1]);
+  const [newPhase, setNewPhase]         = useState("activate");
+  const [deepenLevel, setDeepenLevel]   = useState(3);
+  const [dragOver, setDragOver]         = useState(false);
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [error, setError]               = useState("");
+
+  const chatEndRef  = useRef(null);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior:"smooth" }); }, [messages]);
+
+  const apiKey = config.keys?.[config.provider] || "";
+  const provider = PROVIDERS[config.provider];
+
+  const transitions = { learningMode, newPhase, setNewPhase, bloomLevel, setBloomLevel, setBloomHistory, deepenLevel, setDeepenLevel };
+
+  const getContent = async () => {
+    if (inputTab === "text") return textContent;
+    if (inputTab === "url") {
+      setPrepareStatus("正在读取链接内容…");
+      // Simple fetch via CORS proxy attempt; fall back to instructions
+      try {
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(urlInput)}`);
+        const d = await res.json();
+        const tmp = document.createElement("div");
+        tmp.innerHTML = d.contents;
+        ["script","style","nav","header","footer","aside"].forEach(tag => tmp.querySelectorAll(tag).forEach(el => el.remove()));
+        return tmp.innerText.replace(/\n{3,}/g, "\n\n").trim();
+      } catch {
+        throw new Error("链接抓取失败，请将网页内容复制后使用文本粘贴模式");
+      }
+    }
+    if (inputTab === "file") {
+      const ext = uploadedFile.name.split(".").pop().toLowerCase();
+      setPrepareStatus(`解析 ${uploadedFile.name}…`);
+      if (ext === "pdf") return parsePdf(uploadedFile);
+      if (ext === "docx" || ext === "doc") return parseDocx(uploadedFile);
+      if (ext === "txt" || ext === "md") return parseTxt(uploadedFile);
+      throw new Error("不支持的文件格式，请使用 PDF、DOCX、TXT 或 Markdown");
+    }
+  };
+
+  const startLearning = async () => {
+    setError("");
+    if (!apiKey) { setShowSettings(true); return; }
+    setPreparing(true);
+    setPrepareStatus("准备内容…");
+    try {
+      const content = await getContent();
+      if (!content?.trim()) throw new Error("内容为空");
+      setFinalContent(content);
+      setPrepareStatus("启动对话…");
+      const sysPrompt = learningMode === "new" ? NEW_PROMPT(content) : REVIEW_PROMPT(content);
+      const reply = await callAI(config.provider, apiKey, config.model, sysPrompt, [{ role:"user", content:"开始吧" }]);
+      detectTransitions(reply, transitions);
+      setMessages([{ role:"assistant", content:reply }]);
+      setPhase("learning");
+    } catch(e) {
+      setError(e.message);
+    }
+    setPreparing(false);
+    setPrepareStatus("");
+  };
+
+  const sendMessage = async () => {
+    if (!userInput.trim() || loading) return;
+    const userMsg = { role:"user", content:userInput };
+    const next = [...messages, userMsg];
+    setMessages(next);
+    setUserInput("");
+    setLoading(true);
+    setError("");
+    const sysPrompt = learningMode === "new" ? NEW_PROMPT(finalContent) : REVIEW_PROMPT(finalContent);
+    try {
+      const reply = await callAI(config.provider, apiKey, config.model, sysPrompt, next);
+      detectTransitions(reply, transitions);
+      setMessages(p => [...p, { role:"assistant", content:reply }]);
+    } catch(e) {
+      setError(e.message);
+      setMessages(p => [...p, { role:"assistant", content:"⚠ " + e.message }]);
+    }
+    setLoading(false);
+  };
+
+  const resetAll = () => {
+    setPhase("input"); setMessages([]); setBloomLevel(1); setBloomHistory([1]);
+    setNewPhase("activate"); setDeepenLevel(3); setFinalContent(""); setError("");
+  };
+
+  const canStart =
+    (inputTab==="text" && textContent.trim()) ||
+    (inputTab==="url"  && urlInput.trim()) ||
+    (inputTab==="file" && uploadedFile);
+
+  const isNew = learningMode === "new";
+
+  // ── Settings overlay ──
+  if (showSettings) return (
+    <React.Fragment>
+      <SettingsPanel config={config} setConfig={setConfig} onClose={() => setShowSettings(false)} />
+    </React.Fragment>
+  );
+
+  // ── Input page ──
+  if (phase === "input") return (
+    <div style={{ minHeight:"100vh", background:"#13110e" }}>
+      <div style={{ maxWidth:680, margin:"0 auto", padding:"48px 24px" }}>
+
+        {/* Header */}
+        <div style={{ textAlign:"center", marginBottom:36 }}>
+          <span style={{ display:"block", fontSize:26, color:"#D4B86A", marginBottom:12, textShadow:"0 0 20px #D4B86A55" }}>✦</span>
+          <h1 style={{ fontSize:32, fontWeight:700, color:"#f0e8d8", fontFamily:"'Crimson Pro', serif", letterSpacing:"0.04em", marginBottom:8 }}>苏格拉底导师</h1>
+          <p style={{ fontSize:13, color:"#7a7060", lineHeight:1.8 }}>通过对话引导你自己构建知识，而非被动接受灌输</p>
+        </div>
+
+        {/* Model indicator */}
+        <div style={{ display:"flex", justifyContent:"center", marginBottom:24 }}>
+          <button onClick={() => setShowSettings(true)}
+            style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 16px", background:"#1c1a16", border:"1px solid #2e2a22", borderRadius:20, color:"#9a9080", fontSize:12, cursor:"pointer" }}>
+            <span style={{ color: provider.color }}>{provider.icon}</span>
+            <span>{provider.name}</span>
+            <span style={{ color:"#5a5248" }}>·</span>
+            <span>{PROVIDERS[config.provider].models.find(m => m.id===config.model)?.label || config.model}</span>
+            <span style={{ color:"#4a4438", fontSize:10 }}>⚙</span>
+          </button>
+        </div>
+
+        <div style={{ background:"#1c1a16", border:"1px solid #2e2a22", borderRadius:16, padding:28 }}>
+
+          {/* Learning mode */}
+          <div style={{ marginBottom:24 }}>
+            <div style={{ fontSize:11, color:"#6a6050", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10 }}>学习模式</div>
+            <div style={{ display:"flex", gap:10 }}>
+              {[
+                { id:"new",    icon:"◌", title:"新学模式", desc:"第一次接触这个内容", color:"#9EBA8A",
+                  flow:["激活先验知识","AI 分块带你阅读","苏格拉底式消化","Bloom 高阶深化"] },
+                { id:"review", icon:"◆", title:"复习模式", desc:"已读过，想深化理解", color:"#D4B86A",
+                  flow:["记忆层提问","理解层追问","逐层递进至创造"] },
+              ].map(m => (
+                <div key={m.id} onClick={() => setLearningMode(m.id)}
+                  style={{ flex:1, padding:"14px 12px", borderRadius:12, cursor:"pointer", transition:"all 0.2s",
+                    border:`1.5px solid ${learningMode===m.id ? m.color+"55" : "#2e2a22"}`,
+                    background: learningMode===m.id ? m.color+"0d" : "#13110e" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5 }}>
+                    <span style={{ fontSize:15, color: learningMode===m.id ? m.color : "#5a5248" }}>{m.icon}</span>
+                    <span style={{ fontSize:13, fontWeight:600, color: learningMode===m.id ? m.color : "#7a7060" }}>{m.title}</span>
+                    {learningMode===m.id && <span style={{ marginLeft:"auto", fontSize:10, color:m.color }}>● 已选</span>}
+                  </div>
+                  <p style={{ fontSize:11, color:"#6a6050", marginBottom:8 }}>{m.desc}</p>
+                  {m.flow.map((s,i) => (
+                    <div key={i} style={{ display:"flex", gap:5, alignItems:"center" }}>
+                      <span style={{ fontSize:9, color: learningMode===m.id ? m.color+"99" : "#3a3428" }}>{i+1}.</span>
+                      <span style={{ fontSize:11, color: learningMode===m.id ? "#b0a890" : "#4a4438" }}>{s}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Subject */}
+          <div style={{ marginBottom:20 }}>
+            <label style={f.label}>学习主题（选填）</label>
+            <input style={f.inp} placeholder="例如：牛顿第二定律、导数的几何意义…"
+              value={subject} onChange={e => setSubject(e.target.value)} />
+          </div>
+
+          {/* Content source */}
+          <div style={{ marginBottom:20 }}>
+            <label style={f.label}>学习内容来源</label>
+            <div style={{ display:"flex", gap:2, background:"#13110e", borderRadius:"10px 10px 0 0", border:"1px solid #2e2a22", borderBottom:"none", padding:4 }}>
+              {[{id:"text",label:"文本粘贴",icon:"✎"},{id:"url",label:"链接",icon:"⊕"},{id:"file",label:"文件上传",icon:"⊞"}].map(t => (
+                <button key={t.id} onClick={() => setInputTab(t.id)}
+                  style={{ flex:1, padding:"7px 0", background: inputTab===t.id ? "#2a2820" : "transparent", border:"none", borderRadius:7, color: inputTab===t.id ? "#c8b890" : "#5a5248", fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:5, transition:"all 0.2s" }}>
+                  <span>{t.icon}</span>{t.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ background:"#13110e", border:"1px solid #2e2a22", borderRadius:"0 0 10px 10px", padding:14 }}>
+              {inputTab==="text" && (
+                <>
+                  <textarea style={f.ta} placeholder="将文章、教材、笔记粘贴到这里…"
+                    value={textContent} onChange={e => setTextContent(e.target.value)} rows={8} />
+                  <div style={{ textAlign:"right", fontSize:10, color:"#3a3428", marginTop:6 }}>{textContent.length} 字符</div>
+                </>
+              )}
+              {inputTab==="url" && (
+                <>
+                  <p style={{ fontSize:12, color:"#6a6050", marginBottom:8 }}>支持网页链接，自动提取正文内容</p>
+                  <input style={f.inp} placeholder="https://..." value={urlInput} onChange={e => setUrlInput(e.target.value)} />
+                  <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
+                    {["博客文章","维基百科","课程页面","新闻报道"].map(t => (
+                      <span key={t} style={{ fontSize:11, color:"#5a7050", background:"#1a2218", padding:"2px 8px", borderRadius:10, border:"1px solid #2a3a28" }}>✓ {t}</span>
+                    ))}
+                  </div>
+                </>
+              )}
+              {inputTab==="file" && (
+                <>
+                  <div
+                    style={{ border:`1.5px dashed ${dragOver ? "#D4B86A" : "#2e2a22"}`, background: dragOver ? "#D4B86A08":"transparent", borderRadius:10, padding:28, textAlign:"center", cursor:"pointer", transition:"all 0.2s" }}
+                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={e => { e.preventDefault(); setDragOver(false); setUploadedFile(e.dataTransfer.files[0]); }}
+                    onClick={() => fileInputRef.current?.click()}>
+                    {uploadedFile ? (
+                      <div style={{ display:"flex", alignItems:"center", gap:12, justifyContent:"center" }}>
+                        <span style={{ fontSize:26 }}>{fileIcon(uploadedFile.name)}</span>
+                        <div style={{ textAlign:"left" }}>
+                          <div style={{ fontSize:13, color:"#c8b890", fontWeight:500 }}>{uploadedFile.name}</div>
+                          <div style={{ fontSize:11, color:"#5a5248" }}>{(uploadedFile.size/1024).toFixed(1)} KB</div>
+                        </div>
+                        <button style={{ background:"none", border:"1px solid #3a3428", borderRadius:"50%", color:"#5a5248", width:22, height:22, cursor:"pointer", fontSize:14 }}
+                          onClick={e => { e.stopPropagation(); setUploadedFile(null); }}>×</button>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ fontSize:28, color:"#4a4438", marginBottom:8 }}>⊞</div>
+                        <div style={{ fontSize:13, color:"#9a9585", marginBottom:4 }}>拖拽文件到这里，或点击选择</div>
+                        <div style={{ fontSize:11, color:"#4a4438" }}>支持 PDF · DOCX · TXT · Markdown</div>
+                      </>
+                    )}
+                  </div>
+                  <input ref={fileInputRef} type="file" accept=".txt,.pdf,.docx,.doc,.md" style={{ display:"none" }}
+                    onChange={e => setUploadedFile(e.target.files[0])} />
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* API key warning */}
+          {!apiKey && (
+            <div style={{ marginBottom:16, padding:"10px 14px", background:"#2a1a12", border:"1px solid #5a3a2a", borderRadius:10, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span style={{ fontSize:12, color:"#c08060" }}>⚠ 需要先配置 API Key 才能开始</span>
+              <button onClick={() => setShowSettings(true)} style={{ background:"none", border:"1px solid #5a3a2a", borderRadius:8, color:"#c08060", fontSize:12, padding:"4px 10px", cursor:"pointer" }}>配置 →</button>
+            </div>
+          )}
+
+          {(prepareStatus || error) && (
+            <div style={{ marginBottom:14, padding:"8px 14px", background: error ? "#2a1218" : "#D4B86A0a", border:`1px solid ${error ? "#5a2a30":"#D4B86A22"}`, borderRadius:8, fontSize:12, color: error ? "#c06070" : "#D4B86A", textAlign:"center" }}>
+              {error || prepareStatus}
+            </div>
+          )}
+
+          <button
+            style={{ width:"100%", padding:14, background:"#D4B86A", color:"#13110e", border:"none", borderRadius:10, fontSize:15, fontWeight:700, letterSpacing:"0.05em", transition:"all 0.2s", opacity: canStart && !preparing ? 1 : 0.35, cursor: canStart && !preparing ? "pointer":"not-allowed" }}
+            onClick={startLearning}
+            disabled={!canStart || preparing}>
+            {preparing ? "处理中…" : `开始${learningMode==="new" ? "新学":"复习"}对话 →`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── Learning page ──
+  const currentBloom = BLOOM[bloomLevel - 1];
+  const currentDeepen = BLOOM[deepenLevel - 1] || BLOOM[2];
+
+  return (
+    <div style={{ display:"flex", height:"100vh", overflow:"hidden", background:"#13110e" }}>
+
+      {/* Sidebar */}
+      <div style={{ width:218, background:"#0f0e0b", borderRight:"1px solid #2e2a22", display:"flex", flexDirection:"column", flexShrink:0, overflowY:"auto" }}>
+        <div style={{ padding:"16px 14px", borderBottom:"1px solid #2e2a22", display:"flex", alignItems:"center", gap:7 }}>
+          <span style={{ color:"#D4B86A" }}>✦</span>
+          <span style={{ fontSize:12, color:"#c8bfa8", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{subject || "学习会话"}</span>
+        </div>
+
+        {/* Model pill */}
+        <div style={{ padding:"10px 14px 0" }}>
+          <button onClick={() => setShowSettings(true)}
+            style={{ width:"100%", display:"flex", alignItems:"center", gap:6, padding:"6px 10px", background:"#13110e", border:"1px solid #2e2a22", borderRadius:8, color:"#6a6050", fontSize:11, cursor:"pointer", textAlign:"left" }}>
+            <span style={{ color:provider.color }}>{provider.icon}</span>
+            <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{PROVIDERS[config.provider].models.find(m=>m.id===config.model)?.label || config.model}</span>
+            <span style={{ marginLeft:"auto", color:"#3a3428", fontSize:10 }}>⚙</span>
+          </button>
+        </div>
+
+        {/* Mode badge */}
+        <div style={{ padding:"10px 14px 0" }}>
+          <div style={{ fontSize:11, padding:"4px 10px", borderRadius:10, textAlign:"center",
+            ...(isNew ? { background:"#9EBA8A18", color:"#9EBA8A", border:"1px solid #9EBA8A33" } : { background:"#D4B86A18", color:"#D4B86A", border:"1px solid #D4B86A33" }) }}>
+            {isNew ? "◌ 新学模式" : "◆ 复习模式"}
+          </div>
+        </div>
+
+        {/* Progress */}
+        <div style={{ padding:"14px 0", flex:1 }}>
+          <div style={{ fontSize:10, color:"#3a3428", letterSpacing:"0.1em", textTransform:"uppercase", padding:"0 14px 8px" }}>
+            {isNew ? "学习阶段进度" : "Bloom 认知层次"}
+          </div>
+
+          {isNew ? (
+            <>
+              {NEW_PHASES.map((ph, idx) => {
+                const myIdx = NEW_PHASES.findIndex(p => p.id===ph.id);
+                const curIdx = NEW_PHASES.findIndex(p => p.id===newPhase);
+                const active = ph.id === newPhase;
+                const done   = myIdx < curIdx;
+                return (
+                  <div key={ph.id} style={{ display:"flex", alignItems:"center", gap:9, padding:"7px 14px", transition:"all 0.3s",
+                    background: active ? ph.bg : "transparent",
+                    borderLeft: active ? `3px solid ${ph.color}` : "3px solid transparent",
+                    opacity: done ? 0.4 : active ? 1 : 0.22 }}>
+                    <span style={{ color:ph.color, fontSize:15, width:18, textAlign:"center" }}>{ph.icon}</span>
+                    <div>
+                      <div style={{ fontSize:12, color: active ? ph.color : "#9a9585", fontWeight:500 }}>{ph.name}{done?" ✓":""}</div>
+                      <div style={{ fontSize:10, color:"#4a4438" }}>{ph.desc}</div>
+                    </div>
+                  </div>
+                );
+              })}
+              {newPhase==="deepen" && (
+                <div style={{ marginTop:8, paddingLeft:8, borderLeft:"1px solid #2e2a22", marginLeft:14 }}>
+                  <div style={{ fontSize:9, color:"#3a3428", letterSpacing:"0.1em", textTransform:"uppercase", padding:"0 8px 6px" }}>Bloom 高阶层次</div>
+                  {BLOOM.slice(2).map(l => {
+                    const active = deepenLevel===l.id;
+                    const done   = deepenLevel > l.id;
+                    return (
+                      <div key={l.id} style={{ display:"flex", alignItems:"center", gap:7, padding:"5px 8px",
+                        background: active ? l.bg : "transparent",
+                        borderLeft: active ? `2px solid ${l.color}` : "2px solid transparent",
+                        opacity: done ? 0.4 : active ? 1 : 0.22 }}>
+                        <span style={{ color:l.color, fontSize:12 }}>{l.icon}</span>
+                        <div style={{ fontSize:11, color: active ? l.color : "#7a7060" }}>{l.name}{done?" ✓":""}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          ) : (
+            BLOOM.map(l => {
+              const active = bloomLevel===l.id;
+              const done   = bloomHistory.includes(l.id) && bloomLevel>l.id;
+              return (
+                <div key={l.id} style={{ display:"flex", alignItems:"center", gap:9, padding:"7px 14px", transition:"all 0.3s",
+                  background: active ? l.bg : "transparent",
+                  borderLeft: active ? `3px solid ${l.color}` : "3px solid transparent",
+                  opacity: done ? 0.4 : active ? 1 : 0.22 }}>
+                  <span style={{ color:l.color, fontSize:14, width:18, textAlign:"center" }}>{l.icon}</span>
+                  <div>
+                    <div style={{ fontSize:12, color: active ? l.color : "#9a9585", fontWeight:500 }}>{l.name}{done?" ✓":""}</div>
+                    <div style={{ fontSize:10, color:"#4a4438" }}>{l.desc}</div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <button onClick={resetAll}
+          style={{ margin:"0 14px 16px", padding:"7px 12px", background:"transparent", border:"1px solid #2e2a22", borderRadius:8, color:"#4a4438", fontSize:12, cursor:"pointer" }}>
+          ← 重新开始
+        </button>
+      </div>
+
+      {/* Chat area */}
+      <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+        {/* Status bar */}
+        <div style={{ padding:"11px 20px", borderBottom:"1px solid #2e2a22", background:"#13110e" }}>
+          {isNew ? (
+            (() => {
+              const info = { activate:{color:"#9EBA8A",text:"激活先验 — 连接你已有的认知",icon:"◌"}, read:{color:"#8FA8C8",text:"分块阅读 — 逐段接触新知识",icon:"◎"}, deepen:{color:"#D4B86A",text:`高阶深化 — ${currentDeepen.name}层`,icon:"✦"} };
+              const pi = info[newPhase] || info.activate;
+              return <div style={{ fontSize:12, padding:"5px 14px", borderRadius:20, display:"inline-block", background:pi.color+"15", color:pi.color, border:`1px solid ${pi.color}33` }}>{pi.icon} {pi.text}</div>;
+            })()
+          ) : (
+            <div style={{ fontSize:12, padding:"5px 14px", borderRadius:20, display:"inline-block", background:currentBloom.bg, color:currentBloom.color, border:`1px solid ${currentBloom.color}33` }}>
+              {currentBloom.icon} 当前：{currentBloom.name}层 — {currentBloom.desc}
+            </div>
+          )}
+        </div>
+
+        {/* Messages */}
+        <div style={{ flex:1, overflowY:"auto", padding:"18px 20px", display:"flex", flexDirection:"column", gap:14 }}>
+          {messages.map((m, i) => (
+            <div key={i} className="msg-enter" style={{ display:"flex", alignItems:"flex-end", gap:9, justifyContent: m.role==="user" ? "flex-end" : "flex-start" }}>
+              {m.role==="assistant" && (
+                <div style={{ width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, flexShrink:0, background:"#1c1a16", borderRadius:"50%", border:"1px solid #2e2a22", color:"#D4B86A" }}>✦</div>
+              )}
+              <div style={{ maxWidth:"76%", padding:"11px 15px", borderRadius:12, fontSize:14, lineHeight:1.75,
+                ...(m.role==="user"
+                  ? { background:"#252018", border:"1px solid #3a3020", color:"#d4c9b0", borderBottomRightRadius:4, whiteSpace:"pre-wrap" }
+                  : { background:"#1c1a16", border:"1px solid #2e2a22", color:"#e8e0d0", borderBottomLeftRadius:4 }) }}>
+                {m.role==="assistant" ? React.createElement(FormattedMsg, { text:m.content }) : m.content}
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <div style={{ display:"flex", alignItems:"flex-end", gap:9 }}>
+              <div style={{ width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, flexShrink:0, background:"#1c1a16", borderRadius:"50%", border:"1px solid #2e2a22", color:"#D4B86A" }}>✦</div>
+              <div style={{ background:"#1c1a16", border:"1px solid #2e2a22", borderRadius:"12px 12px 12px 4px", padding:"14px 18px", display:"flex", gap:4 }}>
+                {[0,0.2,0.4].map((d,i) => (
+                  <span key={i} style={{ display:"inline-block", width:6, height:6, background:"#5a5248", borderRadius:"50%", animation:`pulse 1.4s ease-in-out ${d}s infinite` }} />
+                ))}
+              </div>
+            </div>
+          )}
+          {error && (
+            <div style={{ padding:"10px 14px", background:"#2a1218", border:"1px solid #5a2a30", borderRadius:10, fontSize:12, color:"#c06070" }}>⚠ {error}</div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Input */}
+        <div style={{ padding:"12px 20px", borderTop:"1px solid #2e2a22", display:"flex", gap:9, alignItems:"flex-end", background:"#13110e" }}>
+          <textarea
+            style={{ flex:1, background:"#1c1a16", border:"1px solid #2e2a22", borderRadius:10, padding:"9px 13px", color:"#e8e0d0", fontSize:14, lineHeight:1.6, resize:"none", fontFamily:"'Noto Serif SC', serif" }}
+            placeholder="输入你的回答… (Enter 发送，Shift+Enter 换行)"
+            value={userInput}
+            onChange={e => setUserInput(e.target.value)}
+            onKeyDown={e => { if (e.key==="Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+            rows={2}
+          />
+          <button
+            style={{ width:38, height:38, borderRadius:9, border:"none", background:"#D4B86A", color:"#13110e", fontSize:17, fontWeight:700, cursor:"pointer", transition:"all 0.2s", flexShrink:0, opacity: userInput.trim() && !loading ? 1 : 0.3 }}
+            onClick={sendMessage}
+            disabled={!userInput.trim() || loading}>↑</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared field styles ──────────────────────────────────────────────────────
+const f = {
+  field:  { marginBottom:20 },
+  label:  { display:"block", fontSize:11, color:"#6a6050", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:8 },
+  inp:    { width:"100%", background:"#13110e", border:"1px solid #2e2a22", borderRadius:8, padding:"10px 14px", color:"#e8e0d0", fontSize:13, fontFamily:"'Noto Serif SC', serif" },
+  ta:     { width:"100%", background:"transparent", border:"none", color:"#e8e0d0", fontSize:13, lineHeight:1.75, resize:"vertical", fontFamily:"'Noto Serif SC', serif" },
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
