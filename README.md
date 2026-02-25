@@ -12,8 +12,8 @@
 
 | 提供商 | 模型 | 获取 Key |
 |--------|------|----------|
-| Anthropic | Claude Sonnet/Opus/Haiku | console.anthropic.com |
-| OpenAI | GPT-4o, GPT-4o Mini, o1 | platform.openai.com |
+| Anthropic | Claude Sonnet 4.6, Opus 4.6, Haiku 4.5 | console.anthropic.com |
+| OpenAI | GPT-4o, GPT-4o Mini, o1 Preview | platform.openai.com |
 | Google | Gemini 2.0 Flash, 1.5 Pro | aistudio.google.com |
 | DeepSeek | DeepSeek Chat (V3), R1 | platform.deepseek.com |
 

@@ -49,7 +49,7 @@ const {useState,useRef,useEffect,useCallback} = React;
 // ── Provider config ────────────────────────────────────────────────────────────
 const PROV = {
   anthropic:{name:"Anthropic",icon:"◈",color:"#c4956a",ph:"sk-ant-...",docs:"https://console.anthropic.com/keys",
-    models:[{id:"claude-sonnet-4-20250514",lb:"Claude Sonnet 4"},{id:"claude-sonnet-4-5-20251022",lb:"Claude Sonnet 4.5"},{id:"claude-opus-4-5-20251101",lb:"Claude Opus 4.5"},{id:"claude-haiku-4-5-20251001",lb:"Claude Haiku 4.5"}]},
+    models:[{id:"claude-sonnet-4-6",lb:"Claude Sonnet 4.6"},{id:"claude-opus-4-6",lb:"Claude Opus 4.6"},{id:"claude-haiku-4-5-20251001",lb:"Claude Haiku 4.5"},{id:"claude-sonnet-4-5-20251022",lb:"Claude Sonnet 4.5"},{id:"claude-opus-4-5-20251101",lb:"Claude Opus 4.5"}]},
   openai:{name:"OpenAI",icon:"◉",color:"#7aa87a",ph:"sk-...",docs:"https://platform.openai.com/api-keys",
     models:[{id:"gpt-4o",lb:"GPT-4o"},{id:"gpt-4o-mini",lb:"GPT-4o Mini"},{id:"o1-preview",lb:"o1 Preview"}]},
   gemini:{name:"Google Gemini",icon:"◇",color:"#7a9fc4",ph:"AIza...",docs:"https://aistudio.google.com/app/apikey",
@@ -65,7 +65,7 @@ const ls = {
   get:(k)=>{try{return JSON.parse(localStorage.getItem(k))}catch{return null}},
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}},
 };
-const getCfg=()=>ls.get(K_CFG)||{provider:"anthropic",model:"claude-sonnet-4-20250514",keys:{}};
+const getCfg=()=>ls.get(K_CFG)||{provider:"anthropic",model:"claude-sonnet-4-6",keys:{}};
 const getSessions=()=>ls.get(K_SES)||[];
 const saveSession=(s)=>{
   const list=getSessions();
